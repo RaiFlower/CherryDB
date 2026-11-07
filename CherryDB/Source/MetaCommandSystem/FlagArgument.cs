@@ -5,12 +5,14 @@ using System.Threading.Tasks;
 
 namespace CherryDB.Source.MetaCommandSystem;
 
-public class FlagArgument
+public class FlagArgument : Argument
 {
-    public readonly string Name;
+    public override Type Type => typeof(bool);
 
-    public FlagArgument(string name)
+    public override string Signature => $"{App.FlagArgumentPrefix}{Name}";
+
+    public FlagArgument(string name) : base(name)
     {
-        Name = name;
+        
     }
 }

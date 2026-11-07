@@ -189,37 +189,98 @@ public class App : IDisposable
 
         RegisterMetaCommand(new MetaCommand()
             .SetName("exit")
+            .SetDescription("Exits application.")
             .SetAction((args) => _isRunning = false)
+            .Build()
+        );
+
+        RegisterMetaCommand(new MetaCommand()
+            .SetName("clear")
+            .SetDescription("Clears console.")
+            .SetAction((args) =>
+            {
+                Console.Clear();
+                Console.Write("\x1b[3J");
+                Console.WriteLine("Console cleared.");
+            })
+            .Build()
+        );
+
+        RegisterMetaCommand(new MetaCommand()
+            .SetName("commands")
+            .SetDescription("Prints all meta commands.")
+            .SetAction((args) =>
+            {
+                foreach (string name in _metaCommands.Keys)
+                {
+                    Console.WriteLine(name);
+                }
+            })
+            .Build()
+        );
+
+        RegisterMetaCommand(new MetaCommand()
+            .SetName("command")
+            .SetDescription("Prints meta command signature and description.")
+            .SetRequiredArguments([
+                new RequiredArgument<string>("command")
+            ])
+            .SetAction((args) =>
+            {
+                string commandName = args.GetRequired<string>("command");
+
+                if (_metaCommands.TryGetValue(commandName, out MetaCommand? command))
+                {
+                    Console.WriteLine($"""
+                    Signature: {command.Signature}
+                    Description: {command.Description}
+                    """);
+                }
+                else
+                {
+                    Console.WriteLine($"No meta command named \"{commandName}\" found.");
+                }
+            })
+            .Build()
         );
 
         RegisterMetaCommand(new MetaCommand()
             .SetName("tables")
+            .SetDescription("Prints all tables with columns names.")
             .SetAction((args) => PrintTablesInfo())
+            .Build()
         );
 
         RegisterMetaCommand(new MetaCommand()
             .SetName("views")
+            .SetDescription("Prints all views with columns names.")
             .SetAction((args) => PrintViewsInfo())
+            .Build()
         );
 
         RegisterMetaCommand(new MetaCommand()
             .SetName("table")
+            .SetDescription("Prints columns of a table.")
             .SetRequiredArguments([
                 new RequiredArgument<string>("table")
             ])
             .SetAction((args) => PrintTableInfo(args.GetRequired<string>("table")))
+            .Build()
         );
 
         RegisterMetaCommand(new MetaCommand()
             .SetName("view")
+            .SetDescription("Prints columns of a view.")
             .SetRequiredArguments([
                 new RequiredArgument<string>("view")
             ])
             .SetAction((args) => PrintViewInfo(args.GetRequired<string>("view")))
+            .Build()
         );
 
         RegisterMetaCommand(new MetaCommand()
             .SetName("print")
+            .SetDescription("Prints rows of a table or a view.")
             .SetRequiredArguments([
                 new RequiredArgument<string>("table|view")
             ])
@@ -244,6 +305,7 @@ public class App : IDisposable
                     {(args.GetFlag("all") ? "" : $"LIMIT {args.GetOptional<int>("limit")}")}
                 """);
             })
+            .Build()
         );
     }
 

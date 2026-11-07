@@ -5,22 +5,16 @@ using System.Threading.Tasks;
 
 namespace CherryDB.Source.MetaCommandSystem;
 
-public class RequiredArgument
+public abstract class RequiredArgument : Argument
 {
-    public readonly string Name;
-
-    public RequiredArgument(string name)
-    {
-        Name = name;
-    }
+    protected RequiredArgument(string name) : base(name) { }
 }
 
 public class RequiredArgument<T> : RequiredArgument
 {
-    public readonly Type Type;
+    public override Type Type => typeof(T);
 
-    public RequiredArgument(string name) : base(name)
-    {
-        Type = typeof(T);
-    }
+    public override string Signature => $"<{Name}>";
+
+    public RequiredArgument(string name) : base(name) { }
 }

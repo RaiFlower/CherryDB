@@ -5,34 +5,30 @@ using System.Threading.Tasks;
 
 namespace CherryDB.Source.MetaCommandSystem;
 
-public class OptionalArgument
+public abstract class OptionalArgument : Argument
 {
-    public readonly string Name;
-
-    public OptionalArgument(string name)
-    {
-        Name = name;
-    }
+    protected OptionalArgument(string name) : base(name) { }
 }
 
 public class OptionalArgument<T> : OptionalArgument
 {
-    public readonly Type Type;
+    public override Type Type => typeof(T);
+
+    public override string Signature => $"{App.OptionalArgumentPrefix}{Name}={Default}";
 
     private readonly T? _defaultValue;
     private readonly Func<T>? _defaultExpression;
 
     public T Default => _defaultValue ?? _defaultExpression!.Invoke();
 
+
     public OptionalArgument(string name, T defaultValue) : base(name)
     {
-        Type = typeof(T);
         _defaultValue = defaultValue;
     }
 
     public OptionalArgument(string name, Func<T> defaultExpression) : base(name)
     {
-        Type = typeof(T);
         _defaultExpression = defaultExpression;
     }
 }
