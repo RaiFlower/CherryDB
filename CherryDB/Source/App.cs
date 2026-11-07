@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using CherryDB.Source.MetaCommandSystem;
 
 namespace CherryDB.Source;
 
@@ -12,18 +13,23 @@ public class App : IDisposable
     private readonly string _dbFolderPath = Path.Join(AppContext.BaseDirectory, "db");
     private string _savedQueriesFolderPath = null!;
 
-    private readonly string _metaCommandPrefix = "!";
-    private readonly string _savedQueryPrefix = "?";
+    public const string MetaCommandPrefix = "!";
+    public const string SavedQueryPrefix = "?";
+
+    public const string FlagArgumentPrefix = "-";
+    public const string OptionalArgumentPrefix = "--";
 
     private readonly Connection _connection = new();
 
     private readonly ANSIFixer _ANSIFixer = new();
     private readonly Printer _printer = new();
 
+    private readonly Dictionary<string, MetaCommand> _metaCommands = new();
+
     public void Start()
     {
         _ANSIFixer.EnableANSI();
-        
+
         Connect();
 
         _isRunning = true;
@@ -36,18 +42,18 @@ public class App : IDisposable
         {
             string? input = ReadInput();
             Console.WriteLine();
-            
+
             if (string.IsNullOrEmpty(input))
             {
                 Console.WriteLine();
                 continue;
             }
 
-            if (input.StartsWith(_metaCommandPrefix))
+            if (input.StartsWith(MetaCommandPrefix))
             {
                 ExecuteMetaCommand(input[1..]);
             }
-            else if (input.StartsWith(_savedQueryPrefix))
+            else if (input.StartsWith(SavedQueryPrefix))
             {
                 ExecuteSavedQuery(input[1..]);
             }
@@ -57,12 +63,12 @@ public class App : IDisposable
             }
             Console.WriteLine();
         }
+
+        End();
     }
 
     private void End()
     {
-        _isRunning = false;
-
         _connection.Dispose();
     }
 
@@ -111,11 +117,33 @@ public class App : IDisposable
 
         _savedQueriesFolderPath = Path.Join(_dbFolderPath, _connection.Name);
         Directory.CreateDirectory(_savedQueriesFolderPath);
+
+        InitMetaCommands();
     }
 
     private void ExecuteMetaCommand(string command)
     {
-        
+        string[] commandWords = command.Split();
+
+        string commandName = commandWords[0];
+
+        if (_metaCommands.TryGetValue(commandName, out MetaCommand? metaCommand))
+        {
+            try
+            {
+                MetaCommandArguments metaCommandArguments = new(metaCommand);
+                metaCommandArguments.Parse(commandWords[1..]);
+                metaCommand.Action.Invoke(metaCommandArguments);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+        }
+        else
+        {
+            Console.WriteLine($"No meta command named \"{commandName}\" found.");
+        }
     }
 
     private void ExecuteSavedQuery(string command)
@@ -128,7 +156,6 @@ public class App : IDisposable
         catch (Exception ex)
         {
             Console.WriteLine(ex.Message);
-            Console.WriteLine();
         }
     }
 
@@ -141,7 +168,171 @@ public class App : IDisposable
         catch (Exception ex)
         {
             Console.WriteLine(ex.Message);
-            Console.WriteLine();
         }
+    }
+
+    private void InitMetaCommands()
+    {
+        // RegisterMetaCommand(new MetaCommand()
+        //     .SetName("print")
+        //     .SetRequiredArguments([
+        //         new RequiredArgument<string>("text")
+        //     ])
+        //     .SetFlagArguments([
+        //         new FlagArgument("mark")
+        //     ])
+        //     .SetOptionalArguments([
+        //         new OptionalArgument<string>("prefix", "")
+        //     ])
+        //     .SetAction((args) => Console.WriteLine(args.GetOptional<string>("prefix") + args.GetRequired<string>("text") + (args.GetFlag("mark") ? "!" : "")))
+        // );
+
+        RegisterMetaCommand(new MetaCommand()
+            .SetName("exit")
+            .SetAction((args) => _isRunning = false)
+        );
+
+        RegisterMetaCommand(new MetaCommand()
+            .SetName("tables")
+            .SetAction((args) => PrintTablesInfo())
+        );
+
+        RegisterMetaCommand(new MetaCommand()
+            .SetName("views")
+            .SetAction((args) => PrintViewsInfo())
+        );
+
+        RegisterMetaCommand(new MetaCommand()
+            .SetName("table")
+            .SetRequiredArguments([
+                new RequiredArgument<string>("table")
+            ])
+            .SetAction((args) => PrintTableInfo(args.GetRequired<string>("table")))
+        );
+
+        RegisterMetaCommand(new MetaCommand()
+            .SetName("view")
+            .SetRequiredArguments([
+                new RequiredArgument<string>("view")
+            ])
+            .SetAction((args) => PrintViewInfo(args.GetRequired<string>("view")))
+        );
+
+        RegisterMetaCommand(new MetaCommand()
+            .SetName("print")
+            .SetRequiredArguments([
+                new RequiredArgument<string>("table|view")
+            ])
+            .SetFlagArguments([
+                new FlagArgument("all"),
+                new FlagArgument("desc")
+            ])
+            .SetOptionalArguments([
+                new OptionalArgument<int>("limit", 20)
+            ])
+            .SetAction((args) =>
+            {
+                if (!args.GetFlag("all"))
+                {
+                    Console.WriteLine($"{(args.GetFlag("desc") ? "Bottom" : "Top")} {args.GetOptional<int>("limit")} rows: ");
+                    Console.WriteLine();
+                }
+
+                ExecuteRawSQL($"""
+                    SELECT * FROM {args.GetRequired<string>("table|view")} 
+                    {(args.GetFlag("desc") ? "ORDER BY 1 DESC" : "")}
+                    {(args.GetFlag("all") ? "" : $"LIMIT {args.GetOptional<int>("limit")}")}
+                """);
+            })
+        );
+    }
+
+    private void RegisterMetaCommand(MetaCommand metaCommand)
+    {
+        _metaCommands.Add(metaCommand.Name, metaCommand);
+    }
+
+    private void PrintTablesInfo()
+    {
+        ExecuteRawSQL("""
+            SELECT
+                table_name,
+                string_agg(column_name, ', ' ORDER BY ordinal_position) AS table_columns
+            FROM
+                information_schema.columns
+            WHERE
+                table_schema NOT IN ('pg_catalog', 'information_schema')
+            GROUP BY
+                table_schema,
+                table_name
+            ORDER BY
+                table_schema,
+                table_name;
+        """);
+    }
+
+    private void PrintViewsInfo()
+    {
+        ExecuteRawSQL("""
+            SELECT
+                v.table_name AS view_name,
+                string_agg(c.column_name, ', ' ORDER BY c.ordinal_position) AS view_columns
+            FROM
+                information_schema.views v
+                JOIN information_schema.columns c
+                    ON c.table_schema = v.table_schema
+                AND c.table_name = v.table_name
+            WHERE
+                v.table_schema NOT IN ('pg_catalog', 'information_schema')
+            GROUP BY
+                v.table_schema,
+                v.table_name
+            ORDER BY
+                v.table_schema,
+                v.table_name;
+        """);
+    }
+
+    private void PrintTableInfo(string name)
+    {
+        ExecuteRawSQL($"""
+            SELECT
+                table_name,
+                string_agg(column_name, ', ' ORDER BY ordinal_position) AS table_columns
+            FROM
+                information_schema.columns
+            WHERE
+                table_schema NOT IN ('pg_catalog', 'information_schema')
+                AND table_name = '{name}'
+            GROUP BY
+                table_schema,
+                table_name
+            ORDER BY
+                table_schema,
+                table_name;
+        """);
+    }
+
+    private void PrintViewInfo(string name)
+    {
+        ExecuteRawSQL($"""
+            SELECT
+                v.table_name AS view_name,
+                string_agg(c.column_name, ', ' ORDER BY c.ordinal_position) AS view_columns
+            FROM
+                information_schema.views v
+                JOIN information_schema.columns c
+                    ON c.table_schema = v.table_schema
+                AND c.table_name = v.table_name
+            WHERE
+                v.table_schema NOT IN ('pg_catalog', 'information_schema')
+                AND v.table_name = '{name}'
+            GROUP BY
+                v.table_schema,
+                v.table_name
+            ORDER BY
+                v.table_schema,
+                v.table_name;
+        """);
     }
 }
