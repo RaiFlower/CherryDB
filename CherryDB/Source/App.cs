@@ -142,7 +142,7 @@ public class App : IDisposable
         }
         else
         {
-            Console.WriteLine($"No meta command named \"{commandName}\" found.");
+            Console.WriteLine($"No meta-command named \"{commandName}\" found.");
         }
     }
 
@@ -208,7 +208,7 @@ public class App : IDisposable
 
         RegisterMetaCommand(new MetaCommand()
             .SetName("commands")
-            .SetDescription("Prints all meta commands.")
+            .SetDescription("Prints all meta-commands.")
             .SetAction((args) =>
             {
                 foreach (string name in _metaCommands.Keys)
@@ -221,7 +221,7 @@ public class App : IDisposable
 
         RegisterMetaCommand(new MetaCommand()
             .SetName("command")
-            .SetDescription("Prints meta command signature and description.")
+            .SetDescription("Prints meta-command's signature and description.")
             .SetRequiredArguments([
                 new RequiredArgument<string>("command")
             ])
@@ -238,7 +238,7 @@ public class App : IDisposable
                 }
                 else
                 {
-                    Console.WriteLine($"No meta command named \"{commandName}\" found.");
+                    Console.WriteLine($"No meta-command named \"{commandName}\" found.");
                 }
             })
             .Build()
