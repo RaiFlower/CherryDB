@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Linq;
 using System.Threading.Tasks;
 using CherryDB.Source.MetaCommandSystem;
@@ -148,10 +149,15 @@ public class App : IDisposable
 
     private void ExecuteSavedQuery(string command)
     {
+
         try
         {
             string query = File.ReadAllText(Path.Join(_savedQueriesFolderPath, $"{command}.sql"));
             ExecuteRawSQL(query);
+        }
+        catch (FileNotFoundException)
+        {
+            Console.WriteLine($"No saved query named \"{command}\" found.");
         }
         catch (Exception ex)
         {
@@ -170,23 +176,14 @@ public class App : IDisposable
             Console.WriteLine(ex.Message);
         }
     }
+    
+    private void RegisterMetaCommand(MetaCommand metaCommand)
+    {
+        _metaCommands.Add(metaCommand.Name, metaCommand);
+    }
 
     private void InitMetaCommands()
     {
-        // RegisterMetaCommand(new MetaCommand()
-        //     .SetName("print")
-        //     .SetRequiredArguments([
-        //         new RequiredArgument<string>("text")
-        //     ])
-        //     .SetFlagArguments([
-        //         new FlagArgument("mark")
-        //     ])
-        //     .SetOptionalArguments([
-        //         new OptionalArgument<string>("prefix", "")
-        //     ])
-        //     .SetAction((args) => Console.WriteLine(args.GetOptional<string>("prefix") + args.GetRequired<string>("text") + (args.GetFlag("mark") ? "!" : "")))
-        // );
-
         RegisterMetaCommand(new MetaCommand()
             .SetName("exit")
             .SetDescription("Exits application.")
@@ -211,10 +208,7 @@ public class App : IDisposable
             .SetDescription("Prints all meta-commands.")
             .SetAction((args) =>
             {
-                foreach (string name in _metaCommands.Keys)
-                {
-                    Console.WriteLine(name);
-                }
+                _metaCommands.Keys.ToList().ForEach(name => Console.WriteLine(name));
             })
             .Build()
         );
@@ -298,7 +292,6 @@ public class App : IDisposable
                     Console.WriteLine($"{(args.GetFlag("desc") ? "Bottom" : "Top")} {args.GetOptional<int>("limit")} rows: ");
                     Console.WriteLine();
                 }
-
                 ExecuteRawSQL($"""
                     SELECT * FROM {args.GetRequired<string>("table|view")} 
                     {(args.GetFlag("desc") ? "ORDER BY 1 DESC" : "")}
@@ -307,11 +300,6 @@ public class App : IDisposable
             })
             .Build()
         );
-    }
-
-    private void RegisterMetaCommand(MetaCommand metaCommand)
-    {
-        _metaCommands.Add(metaCommand.Name, metaCommand);
     }
 
     private void PrintTablesInfo()

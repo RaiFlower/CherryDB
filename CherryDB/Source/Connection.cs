@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using Npgsql;
 
@@ -32,20 +33,34 @@ public class Connection : IDisposable
 
     public void ExecuteSQL(string sql, Action<DbDataReader> printAction)
     {
+        Stopwatch stopwatch = new();
+        stopwatch.Start();
+
         using var command = new NpgsqlCommand(sql, _connection);
         using var reader = command.ExecuteReader();
 
         do
         {
             if (reader.FieldCount > 0)
+            {
                 printAction(reader);
+                Console.WriteLine();
+            }
         }
         while (reader.NextResult());
 
+        bool needsLine = false;
+
         if (reader.RecordsAffected > 0)
         {
-            Console.WriteLine();
+            needsLine = true;
             Console.WriteLine($"Rows affected: {reader.RecordsAffected}.");
         }
+
+        if (needsLine)
+        {
+            Console.WriteLine();
+        }
+        Console.WriteLine($"Query performed in {stopwatch.ElapsedMilliseconds} ms.");
     }
 }

@@ -10,6 +10,8 @@ namespace CherryDB.Source;
 
 public class Printer
 {
+    public string ExportFolderPath = null!;
+
     public void PrintTable(DbDataReader reader)
     {
         int padding = 5;
@@ -23,7 +25,6 @@ public class Printer
             maxWidths[i] = headers[i].Length;
         }
 
-        // Pass 1: read everything into strings and track max width per column
         var rows = new List<string[]>();
         while (reader.Read())
         {
@@ -39,7 +40,6 @@ public class Printer
             rows.Add(row);
         }
 
-        // Pass 2: draw (single write via StringBuilder)
         var sb = new StringBuilder();
 
         for (int i = 0; i < cols; i++)
@@ -58,7 +58,7 @@ public class Printer
             }
             sb.AppendLine();
         }
-        
+
         Console.Write(sb.ToString());
     }
 
