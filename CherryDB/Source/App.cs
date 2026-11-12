@@ -152,7 +152,9 @@ public class App : IDisposable
 
         try
         {
-            string query = File.ReadAllText(Path.Join(_savedQueriesFolderPath, $"{command}.sql"));
+            IEnumerable<string> files = Directory.EnumerateFiles(_savedQueriesFolderPath, "*.sql", SearchOption.AllDirectories);
+            string file = files.First(f => Path.GetFileName(f) == $"{command}.sql");
+            string query = File.ReadAllText(file);
             ExecuteRawSQL(query);
         }
         catch (FileNotFoundException)
