@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data.Common;
+using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using CherryDB.Source.MetaCommandSystem;
 
@@ -178,7 +181,7 @@ public class App : IDisposable
             Console.WriteLine(ex.Message);
         }
     }
-    
+
     private void RegisterMetaCommand(MetaCommand metaCommand)
     {
         _metaCommands.Add(metaCommand.Name, metaCommand);
@@ -229,6 +232,7 @@ public class App : IDisposable
                 {
                     Console.WriteLine($"""
                     Signature: {command.Signature}
+                    
                     Description: {command.Description}
                     """);
                 }
@@ -302,25 +306,44 @@ public class App : IDisposable
             })
             .Build()
         );
+
+        RegisterMetaCommand(new MetaCommand()
+            .SetName("directory")
+            .SetDescription("Opens saved queries directory in platform default file manager.")
+            .SetAction((args) => OpenDatabaseDirectory())
+            .Build()
+        );
+
+        RegisterMetaCommand(new MetaCommand()
+            .SetName("code")
+            .SetDescription("Opens saved queries directory in Visual Studio Code.")
+            .SetAction((args) => OpenDatabaseDirectoryInCode())
+            .Build()
+        );
     }
 
     private void PrintTablesInfo()
     {
         ExecuteRawSQL("""
-            SELECT
-                table_name,
-                string_agg(column_name, ', ' ORDER BY ordinal_position) AS table_columns
-            FROM
-                information_schema.columns
-            WHERE
-                table_schema NOT IN ('pg_catalog', 'information_schema')
-            GROUP BY
-                table_schema,
-                table_name
-            ORDER BY
-                table_schema,
-                table_name;
-        """);
+        SELECT
+            c.table_name,
+            string_agg(c.column_name, ', ' ORDER BY c.ordinal_position) AS table_columns
+        FROM
+            information_schema.columns c
+        JOIN
+            information_schema.tables t
+            ON  t.table_schema = c.table_schema
+            AND t.table_name   = c.table_name
+        WHERE
+            t.table_type = 'BASE TABLE'
+            AND c.table_schema NOT IN ('pg_catalog', 'information_schema')
+        GROUP BY
+            c.table_schema,
+            c.table_name
+        ORDER BY
+            c.table_schema,
+            c.table_name;
+    """);
     }
 
     private void PrintViewsInfo()
@@ -386,5 +409,69 @@ public class App : IDisposable
                 v.table_schema,
                 v.table_name;
         """);
+    }
+
+    private void OpenDatabaseDirectory()
+    {
+        string path = Path.GetFullPath(_savedQueriesFolderPath);
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"\"{path}\"",
+                UseShellExecute = true
+            });
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            Process.Start("open", $"\"{path}\"");
+        }
+        else
+        {
+            Process.Start("xdg-open", $"\"{path}\"");
+        }
+
+        Console.WriteLine("Opened (tried to open?) database directory in file manager.");
+    }
+
+    private void OpenDatabaseDirectoryInCode()
+    {
+        string path = Path.GetFullPath(_savedQueriesFolderPath);
+
+        ProcessStartInfo processStartInfo = new()
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            processStartInfo.FileName = "cmd.exe";
+            processStartInfo.Arguments = $"/c code \"{path}\"";
+        }
+        else
+        {
+            processStartInfo.FileName = "code";
+            processStartInfo.ArgumentList.Add(path);
+        }
+
+        try
+        {
+            using var process = Process.Start(processStartInfo);
+            if (process == null) return;
+
+            process.WaitForExit(5000);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            return;
+        }
+
+        Console.WriteLine("Opened database directory in Visual Studio Code.");
     }
 }
